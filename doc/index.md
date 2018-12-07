@@ -29,8 +29,4 @@ On peut au lieu de faire une médiane qui enlève la spatialité afficher direct
 en fonction de la semaine.
 Piste: Vispy, Glumpy 
 
-# Suivi
-## Pré-traitement
 
-- [ ] Ordonnement et partionnement du jeu de données suivant l'année mois
-- [ ] Extraction des données par quadrillage via un script python

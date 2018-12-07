@@ -1,0 +1,28 @@
+#version 120
+uniform vec2 mouse;
+uniform float zoom;
+attribute vec2 position;
+varying float v_radius;
+void main () {
+    vec2 p = position - mouse;
+    float d = length(p);
+    p = normalize(p);
+    v_radius = 2.0;
+    if( d < 0.5 ) {
+        float factor;
+        float limit = 0.5;
+        // Compute distortion factor
+        if (d*zoom < limit) {
+            factor = d*zoom;
+            // Adapt radius to zoom level and point position
+            v_radius = 2.0 + (0.50-d)*5.0 * min((zoom-1.0)/5.0,2.0);
+        } else {
+            factor = limit +(0.5-limit)*(d*zoom-limit)/(0.5*zoom-limit);
+        }
+        // Compute new position
+        gl_Position = vec4(mouse + p*factor, 0.0, 1.0);
+    } else {
+        gl_Position = vec4(position, 0.0, 1.0);
+    }
+    gl_PointSize = v_radius/5;
+}
