@@ -1,2 +1,5 @@
 Data/
 .DS_Store
+.Rproj.user
+Results/.DS_Store
+.RHistory

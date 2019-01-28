@@ -3,8 +3,6 @@
 #########################################
 
 rm(list=objects())
-getwd()
-setwd("/Users/thibault/Desktop/Cours\ Master\ 2/1er\ Semestre/Projet\ Data\ Mining")
 
 library(padr)
 library(plyr)
@@ -255,3 +253,68 @@ p <- plot_mapbox(mode = 'scattermapbox') %>%
     showlegend=FALSE)
 p
 
+
+###################################### Airports ######################################
+
+JFK_data_pickup = Data[!(Data$pickup_longitude<(-73.8352) | Data$pickup_longitude>(-73.7401) |
+                           Data$pickup_latitude<40.619  | Data$pickup_latitude>40.6659),]
+summary(JFK_data_pickup)
+
+JFK_data_dropoff = Data[!(Data$dropoff_longitude<(-73.8352) | Data$dropoff_longitude>(-73.7401) |
+                           Data$dropoff_latitude<40.619  | Data$dropoff_latitude>40.6659),]
+summary(JFK_data_dropoff)
+
+
+p <- plot_ly(alpha = 0.5) %>%
+  add_histogram(x = ~Data$fare_amount, name='All trips', histnorm='probability', nbinsx=100) %>%
+  add_histogram(x = ~JFK_data_dropoff$fare_amount, name='JFK dropoffs', histnorm='probability', nbinsx=100) %>%
+  add_histogram(x = ~JFK_data_pickup$fare_amount, name='JFK pickups', histnorm='probability', nbinsx=100) %>%
+  layout(barmode = "overlay", title='Fare histograms', xaxis=list(title='Fares', range=list(0,100)))
+p
+
+# New column for airports
+Data$airport_dropoff <- ''
+Data$airport_pickup <- ''
+
+Data[!(Data$pickup_longitude<(-73.8352) | Data$pickup_longitude>(-73.7401) |
+         Data$pickup_latitude<40.619  | Data$pickup_latitude>40.6659), 'airport_dropoff'] <- 'JFK'
+Data[!(Data$dropoff_longitude<(-73.8352) | Data$dropoff_longitude>(-73.7401) |
+         Data$dropoff_latitude<40.619  | Data$dropoff_latitude>40.6659), 'airport_dropoff'] <- 'JFK'
+
+Data[!(Data$pickup_longitude<(-74.1925) | Data$pickup_longitude>(-74.1531) |
+         Data$pickup_latitude<40.6700  | Data$pickup_latitude>40.7081), 'airport_dropoff'] <- 'EWR'
+Data[!(Data$dropoff_longitude<(-74.1925) | Data$dropoff_longitude>(-74.1531) |
+         Data$dropoff_latitude<40.6700  | Data$dropoff_latitude>40.7081), 'airport_dropoff'] <- 'EWR'
+
+Data[!(Data$pickup_longitude<(-73.8895) | Data$pickup_longitude>(-73.8550) |
+         Data$pickup_latitude<40.7664  | Data$pickup_latitude>40.7931), 'airport_dropoff'] <- 'LaGuardia'
+Data[!(Data$dropoff_longitude<(-73.8895) | Data$dropoff_longitude>(-73.8550) |
+         Data$dropoff_latitude<40.7664  | Data$dropoff_latitude>40.7931), 'airport_dropoff'] <- 'LaGuardia'
+
+# distance analysis
+library(pracma)
+distance_from_coord <- function(row) {
+  return(haversine(c(row[1], row[2]), c(row[3], row[4])))
+}
+
+Data$distance <- apply(Data[, c('pickup_latitude', 'pickup_longitude', 'dropoff_latitude', 'dropoff_longitude')], 1,
+                       distance_from_coord)
+
+summary(Data$distance)
+p <- plot_ly(alpha = 0.5) %>%
+  add_histogram(x = ~Data$distance, histnorm='probability', nbinsx=100) %>%
+  layout(title='Distances', xaxis=list(title='Kilometers', range=list(0,30)))
+p
+
+
+p <- plot_ly(data = Data, x = ~distance, y = ~fare_amount, type='scatter',
+             marker = list(size = 1.5,
+                           color = 'rgba(255, 182, 193, .9)')) %>%
+  layout(title='Distances VS Price', xaxis=list(title='Distance (Km)'), yaxis=list(title='Fare (dollars'))
+p
+
+p <- plot_ly(data = Data[(Data$airport_dropoff=='')&(Data$airport_pickup==''),], x = ~distance, y = ~fare_amount, type='scatter',
+             marker = list(size = 1.5,
+                           color = 'rgba(255, 182, 193, .9)')) %>%
+  layout(title='Distances VS Price (without airports)', xaxis=list(title='Distance (Km)'), yaxis=list(title='Fare (dollars'))
+p
