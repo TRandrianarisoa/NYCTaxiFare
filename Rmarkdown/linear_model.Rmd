@@ -1,0 +1,197 @@
+---
+title: "Linear_model"
+author: "Clement GAUCHY"
+date: "29 janvier 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+étude du modèle linéaire dans l'étude de la prédiction du prix des courses de taxi:
+
+## Modèle linéaire simple
+
+on charge toutes les données 
+
+```{r modele lineaire simple, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(DBI)
+
+ch <- dbConnect(RClickhouse::clickhouse(), host = "localhost", dbname = "nyctf")
+data0 <- dbGetQuery(ch, 'SELECT * FROM nycfare ORDER BY rand() LIMIT 50000')
+data0 <- data0 %>% select(-c(ozone, izone, meteo_date))
+
+bounding_box <- c(-74.5, -72.8, 40.5, 41.8)
+
+#Airpots in NYC area
+jfk <- c(-73.7822222222, 40.6441666667)
+laguardia <- c(-73.8719444444, 40.7747222222)
+newark <- c(-74.175, 40.6897222222)  
+
+#Difference between the distance to an airport at pickup and dropoff
+distance_to_airport <- function(x1, y1, x2, y2, airport) {
+  return(abs((x1 - airport[1])^2 + (y1 - airport[2])^2 - (x2 - airport[1])^2 - (y2 - airport[2])^2))
+}
+
+
+data1 <- data0 %>% 
+  filter(fare > 0) %>%
+  filter(ilong > bounding_box[1], ilong < bounding_box[2]) %>%
+  filter(olong > bounding_box[1], olong < bounding_box[2]) %>%
+  filter(ilat > bounding_box[3], ilat < bounding_box[4]) %>%
+  filter(olat > bounding_box[3], olat < bounding_box[4]) %>%
+  mutate(log_fare = log(fare)) %>%
+  drop_na() 
+
+
+  
+train <- data1[1:30000, ]
+test <- data1[-(1:30000), ]
+
+lm0 <- lm(log_fare ~ . - fare - id, train)
+fit <- predict(lm0, test)
+
+print("rmse vanilla \n")
+mean((test$fare - exp(fit))^2) %>% sqrt()
+
+test_fare <- test[ ,c("fare", "date")] %>% arrange(date) %>% mutate(fit = exp(fit))
+
+test_fare[1:1000,] %>%
+  gather (key = type, value = value, -date) %>%
+  ggplot() +
+  aes(x = date, y = value, color = type, group = type) + 
+  geom_line() +
+  ggtitle("Modèle linéaire simple")
+```
+
+On regarde le résumé du modèle
+
+```{r summary1, warning=FALSE}
+summary(lm0)
+```
+
+
+## Modèle linéaire pondérée
+
+On affecte un poids nul aux prix supérieurs à 50$, que l'on considère comme des outliers
+
+```{r modele lineaire ponderee, warning=FALSE}
+data1_w <- data0 %>% 
+  filter(fare > 0) %>%
+  filter(ilong > bounding_box[1], ilong < bounding_box[2]) %>%
+  filter(olong > bounding_box[1], olong < bounding_box[2]) %>%
+  filter(ilat > bounding_box[3], ilat < bounding_box[4]) %>%
+  filter(olat > bounding_box[3], olat < bounding_box[4]) %>%
+  mutate(log_fare = log(fare), wgh = as.numeric(fare < 50)) %>%
+  drop_na() 
+
+train <- data1_w[1:30000, ]
+test <- data1_w[-(1:30000), ]
+
+lmw <- lm(log_fare ~ . - fare, train, weights = train$wgh)
+fit <- predict(lmw, test)
+print("rmse weighted \n")
+mean((test$fare - exp(fit))^2) %>% sqrt()
+
+test_fare <- test[ ,c("fare", "date")] %>% arrange(date) %>% mutate(fit = exp(fit))
+
+test_fare[1:1000,] %>%
+  gather (key = type, value = value, -date) %>%
+  ggplot() +
+  aes(x = date, y = value, color = type, group = type) + 
+  geom_line() +
+  ggtitle("Modèle linéaire pondérée")
+```
+
+Résumé du modèle pondéré:
+
+```{r summary2, warning=FALSE}
+summary(lmw)
+```
+
+## Modèle avec plus de feautures
+On ajoute: La distance euclidienne, la distance aux aéroports laguardia, jfk, et newark, ainsi que les variables `w_day` et `hour`
+
+```{r engineered features, warning=FALSE}
+data2 <- data1 %>% 
+mutate(log_trip_distance = log(sqrt((ilong - olong)^2 + (ilat - olat)^2)),
+       trip_distance = sqrt((ilong - olong)^2 + (ilat - olat)^2)) %>% 
+filter(log_trip_distance != -Inf) %>%
+mutate(dist_to_jfk = distance_to_airport(ilong, ilat, olong, olat, jfk),
+       dist_to_laguardia = distance_to_airport(ilong, ilat, olong, olat, laguardia),
+       dist_to_newark = distance_to_airport(ilong, ilat, olong, olat, newark)) %>%
+mutate(w_day = wday(date), hour = hour(date)) %>%
+drop_na() %>%
+as_tibble()
+
+
+
+train <- data2[1:30000, ]
+test <- data2[-(1:30000), ]
+
+lm1 <- lm(log_fare ~ . - date - id - fare, train)
+fit <- predict(lm1, test)
+
+print("rmse engineered features \n")
+mean((test$fare - exp(fit))^2) %>% sqrt()
+
+test_fare <- test[ ,c("fare", "date")] %>% arrange(date) %>% mutate(fit = exp(fit))
+
+test_fare[1:1000,] %>%
+  gather (key = type, value = value, -date) %>%
+  ggplot() +
+  aes(x = date, y = value, color = type, group = type) + 
+  geom_line() +
+    ggtitle("Modèle linéaire avec de nouvelles features")
+```
+
+Résumé du modèle avec toutes les variables:
+
+```{r summary3, warning=FALSE}
+summary(lm1)
+```
+
+
+## Modèle Lasso 
+
+Les très faibles poids nous motivent a envisager une méthode imposant de la sparsité tel que le Lasso.
+
+```{r lasso, warning=FALSE}
+library(glmnet)
+train <- data2[1:30000, ]
+test <- data2[-(1:30000), ]
+
+
+## Model 1: Lasso regression
+
+X <- as.matrix(train %>% select(-fare, -log_fare, -date) %>% drop_na())
+
+lasso <- glmnet(X, train$log_fare, alpha = 1, lambda = 0.1) 
+fit <- predict(lasso, as.matrix(test %>% select(-fare, -log_fare, -date))) 
+
+mean((test$fare - exp(fit))^2) %>% sqrt()
+
+test %>% select(date, fare) %>% mutate(fit = exp(fit)) %>% arrange(date) %>%
+  head(1000) %>%
+  gather (key = type, value = value, -date) %>%
+  ggplot() +
+  aes(x = date, y = value, color = type, group = type) + 
+  geom_line() +
+  ggtitle("Lasso")
+```
+
+
+On voit que le modèle n'a selectionné que 3 variables sur 17
+
+```{r coef lasso, warning=FALSE}
+coef(lasso)
+```
+
+
+
+
