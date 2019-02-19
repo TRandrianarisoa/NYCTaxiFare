@@ -136,7 +136,7 @@ limit <- as.POSIXct("2014-01-01 00:00:00", format = "%Y-%m-%d %H:%M:%S")
 train <- data1 %>% filter(date < limit)
 test <- data1 %>% filter(date >= limit)
 
-lm0 <- lm(log_fare ~ . - fare, train)
+lm0 <- lm(log_fare ~ . - fare - date, train)
 fit <- predict(lm0, test) 
 
 summary(lm0)
@@ -202,7 +202,7 @@ grid_search <- expand.grid(
 The final random forest is the following 
 
 ```{r eval=FALSE}
-rf <- ranger(formula = fare ~ . ,
+rf <- ranger(formula = fare ~ . - date,
                      data = train,
                      num.trees = 300,
                      mtry = 8,
