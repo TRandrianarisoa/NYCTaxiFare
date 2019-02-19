@@ -33,7 +33,7 @@ Distance from JFK, LaGuardia, Newark: the distance to the airports are meaningfu
 To capture the temporal influence on the taxi fare price we add several engineered features of the timestamp of the taxi ride. 
 
 `w_day` and `hour` respectivly a number between 1 and 7 coding the day of the week, and a number between 0 and 23 for the hour.  
-The features `night_surcharge` and `wday_peak_hours` are binary and are build to code the peak hours and night hours price surcharge. (ajouter lien vers la tarification)
+The features `night_surcharge` and `wday_peak_hours` are binary and are build to code the peak hours and night hours price surcharge. (informations found on: <https://www1.nyc.gov/site/tlc/passengers/taxi-fare.page>)
 
 ## Linear model
 
@@ -245,6 +245,8 @@ summary(lm2)
 plot(lm2, which = 1, pch = "+")
 
 fit <- predict(lm2, test)
+
+summary(fit)
 ```
 
 The information left in the residuals seems to be of less importance compared to the previous linear model trained on all the features. But the test error is very high (8.65`$`).
